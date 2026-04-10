@@ -4,14 +4,35 @@ import '../widgets/custom_button.dart';
 import '../services/tts_service.dart';
 import '../utils/colors.dart';
 
-class SignUpScreen extends StatelessWidget {
+class SignUpScreen extends StatefulWidget {
+  const SignUpScreen({super.key});
+
+  @override
+  State<SignUpScreen> createState() => _SignUpScreenState();
+}
+
+class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController = TextEditingController();
-
   final TTSService tts = TTSService();
+  String? selectedGender;
 
-  SignUpScreen({super.key});
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      tts.speak("Halaman daftar akun");
+    });
+  }
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
 
   void handleSignUp(BuildContext context) {
     String email = emailController.text;
@@ -28,31 +49,63 @@ class SignUpScreen extends StatelessWidget {
       return;
     }
 
+    if (selectedGender == null) {
+      tts.speak("Jenis kelamin wajib dipilih");
+      return;
+    }
+
     tts.speak("Pendaftaran berhasil");
     Navigator.pop(context);
   }
 
+  Widget buildGenderOption(String gender) {
+    return RadioListTile<String>(
+      contentPadding: EdgeInsets.zero,
+      value: gender,
+      groupValue: selectedGender,
+      activeColor: AppColors.primary,
+      fillColor: MaterialStateProperty.resolveWith((states) {
+        if (states.contains(MaterialState.selected)) {
+          return AppColors.primary;
+        }
+        return AppColors.text;
+      }),
+      title: Text(
+        gender,
+        style: TextStyle(color: AppColors.text),
+      ),
+      onChanged: (value) {
+        setState(() {
+          selectedGender = value;
+        });
+
+        if (value != null) {
+          tts.speak("Jenis kelamin $value dipilih");
+        }
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    tts.speak("Halaman daftar akun");
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text("Sign Up"),
+        title: const Text("Sign Up"),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
             CustomTextField(
               label: "Email",
               controller: emailController,
             ),
 
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
             CustomTextField(
               label: "Password",
@@ -60,7 +113,7 @@ class SignUpScreen extends StatelessWidget {
               obscure: true,
             ),
 
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
             CustomTextField(
               label: "Konfirmasi Password",
@@ -68,7 +121,36 @@ class SignUpScreen extends StatelessWidget {
               obscure: true,
             ),
 
-            SizedBox(height: 30),
+            const SizedBox(height: 20),
+
+            Semantics(
+              label: "Pilih jenis kelamin",
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.text),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Jenis Kelamin",
+                      style: TextStyle(
+                        color: AppColors.text,
+                        fontSize: 16,
+                      ),
+                    ),
+                    buildGenderOption("Laki-laki"),
+                    const Divider(color: Colors.white24, height: 1),
+                    buildGenderOption("Perempuan"),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 30),
 
             CustomButton(
               text: "Daftar",

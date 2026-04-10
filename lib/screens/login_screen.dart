@@ -7,6 +7,7 @@ import '../utils/colors.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
+import 'camera_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   final TextEditingController emailController = TextEditingController();
@@ -95,8 +96,13 @@ class LoginScreen extends StatelessWidget {
 
             // 🔘 LOGIN BUTTON
             CustomButton(
-              text: "Login",
-              onPressed: () => handleLogin(context),
+              text: "Buka Kamera",
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => CameraScreen()),
+                );
+              },
             ),
 
             SizedBox(height: 15),
