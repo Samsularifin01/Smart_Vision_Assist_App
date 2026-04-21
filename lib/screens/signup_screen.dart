@@ -20,12 +20,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController phoneController = TextEditingController();
   final TTSService tts = TTSService();
   String? selectedGender;
+  String passwordStrength = ""; // Track password strength
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       tts.speak("Halaman daftar akun");
+    });
+
+    // ============ LISTENER UNTUK PASSWORD REAL-TIME ============
+    passwordController.addListener(() {
+      setState(() {
+        passwordStrength = _getPasswordStrength(passwordController.text);
+      });
     });
   }
 
@@ -93,6 +101,56 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     tts.speak("Pendaftaran berhasil");
     Navigator.pop(context);
+  }
+
+  // ============ FUNGSI UNTUK MENGHITUNG PASSWORD STRENGTH ============
+  String _getPasswordStrength(String password) {
+    if (password.isEmpty) {
+      return "";
+    }
+
+    // ✅ Cek ada huruf besar
+    bool hasUpperCase = password.contains(RegExp(r'[A-Z]'));
+    
+    // ✅ Cek ada angka
+    bool hasNumber = password.contains(RegExp(r'[0-9]'));
+
+    // ✅ Penentuan strength
+    if (password.length < 6) {
+      return "weak"; // Password lemah
+    } else if (hasUpperCase && hasNumber) {
+      return "strong"; // Password kuat
+    } else {
+      return "medium"; // Password sedang
+    }
+  }
+
+  // ============ FUNGSI UNTUK MENDAPATKAN WARNA PASSWORD STRENGTH ============
+  Color _getPasswordStrengthColor() {
+    switch (passwordStrength) {
+      case "weak":
+        return Colors.red; // Danger
+      case "strong":
+        return Colors.green; // Success
+      case "medium":
+        return Colors.orange; // Warning
+      default:
+        return Colors.transparent;
+    }
+  }
+
+  // ============ FUNGSI UNTUK MENDAPATKAN TEXT PASSWORD STRENGTH ============
+  String _getPasswordStrengthText() {
+    switch (passwordStrength) {
+      case "weak":
+        return "Password lemah";
+      case "strong":
+        return "Password kuat";
+      case "medium":
+        return "Password sedang";
+      default:
+        return "";
+    }
   }
 
   Widget buildGenderOption(String gender) {
@@ -270,6 +328,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 controller: passwordController,
                 obscure: true,
               ),
+
+              // ============ PASSWORD STRENGTH INDICATOR ============
+              if (passwordStrength.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    _getPasswordStrengthText(),
+                    style: TextStyle(
+                      color: _getPasswordStrengthColor(),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
 
               SizedBox(height: 16),
 
