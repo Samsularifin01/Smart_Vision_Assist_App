@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/custom_button.dart';
 import '../services/tts_service.dart';
+import '../services/register_api_service.dart';
+import '../models/register_request.dart';
 import '../utils/colors.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -19,6 +21,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TTSService tts = TTSService();
+  final RegisterApiService registerApi = RegisterApiService();
   String? selectedGender;
   String passwordStrength = ""; // Track password strength
 
@@ -47,7 +50,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  void handleSignUp(BuildContext context) {
+  Future<void> handleSignUp(BuildContext context) async {
     String name = nameController.text;
     String phone = phoneController.text;
     String email = emailController.text;
@@ -99,8 +102,30 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
-    tts.speak("Pendaftaran berhasil");
-    Navigator.pop(context);
+    final RegisterRequest request = RegisterRequest(
+      name: name,
+      email: email,
+      phone: phone,
+      gender: selectedGender!.toLowerCase(),
+      password: password,
+    );
+
+    final response = await registerApi.register(request);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    if (response.isSuccess) {
+      tts.speak(response.message.isNotEmpty
+          ? response.message
+          : "Pendaftaran berhasil");
+      Navigator.pop(context);
+    } else {
+      tts.speak(response.message.isNotEmpty
+          ? response.message
+          : "Email sudah digunakan");
+    }
   }
 
   // ============ FUNGSI UNTUK MENGHITUNG PASSWORD STRENGTH ============
@@ -293,9 +318,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      buildGenderOption("Laki-laki"),
+                      buildGenderOption("laki-laki"),
                       const Divider(color: Colors.white24, height: 8),
-                      buildGenderOption("Perempuan"),
+                      buildGenderOption("perempuan"),
                     ],
                   ),
                 ),
