@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/custom_button.dart';
 import '../services/tts_service.dart';
+import '../services/forgot_password_api_service.dart';
+import '../models/forgot_password_request.dart';
 import '../utils/colors.dart';
 import 'otp_screen.dart';
 
 class ForgotPasswordScreen extends StatelessWidget {
   final TextEditingController emailController = TextEditingController();
   final TTSService tts = TTSService();
+  final ForgotPasswordApiService forgotApi = ForgotPasswordApiService();
 
   ForgotPasswordScreen({super.key});
 
   // ============ HANDLE RESET PASSWORD ============
-  void handleReset(BuildContext context) {
+  Future<void> handleReset(BuildContext context) async {
     String email = emailController.text.trim();
 
     // ============ VALIDASI EMAIL KOSONG ============
@@ -27,11 +30,41 @@ class ForgotPasswordScreen extends StatelessWidget {
       return;
     }
 
-    tts.speak("OTP telah dikirim ke email Anda");
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => OTPScreen()),
+    final response = await forgotApi.requestReset(
+      ForgotPasswordRequest(email: email),
     );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    if (response.isSuccess) {
+      if (response.token == null || response.token!.isEmpty) {
+        tts.speak("Token OTP belum diterima dari server");
+        return;
+      }
+      if (response.expired == null) {
+        tts.speak("Waktu kedaluwarsa OTP belum diterima dari server");
+        return;
+      }
+      tts.speak(response.message.isNotEmpty
+          ? response.message
+          : "OTP berhasil dikirim");
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OTPScreen(
+            email: email,
+            serverToken: response.token!,
+            expiredAt: response.expired!,
+          ),
+        ),
+      );
+    } else {
+      tts.speak(response.message.isNotEmpty
+          ? response.message
+          : "Email tidak ditemukan");
+    }
   }
 
   @override

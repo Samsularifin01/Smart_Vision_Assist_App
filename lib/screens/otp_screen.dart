@@ -3,14 +3,40 @@ import 'package:flutter/services.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/custom_button.dart';
 import '../services/tts_service.dart';
+import '../services/forgot_password_api_service.dart';
+import '../models/forgot_password_request.dart';
 import '../utils/colors.dart';
 import 'reset_password_screen.dart';
 
-class OTPScreen extends StatelessWidget {
+class OTPScreen extends StatefulWidget {
+  final String email;
+  final String serverToken;
+  final int expiredAt;
+
+  const OTPScreen({
+    super.key,
+    required this.email,
+    required this.serverToken,
+    required this.expiredAt,
+  });
+
+  @override
+  State<OTPScreen> createState() => _OTPScreenState();
+}
+
+class _OTPScreenState extends State<OTPScreen> {
   final TextEditingController otpController = TextEditingController();
   final TTSService tts = TTSService();
+  final ForgotPasswordApiService forgotApi = ForgotPasswordApiService();
+  late String currentToken;
+  late int currentExpiredAt;
 
-  OTPScreen({super.key});
+  @override
+  void initState() {
+    super.initState();
+    currentToken = widget.serverToken;
+    currentExpiredAt = widget.expiredAt;
+  }
 
   // ============ VERIFY OTP CODE ============
   void verifyOTP(BuildContext context) {
@@ -28,18 +54,73 @@ class OTPScreen extends StatelessWidget {
       return;
     }
 
-    // ============ LANGSUNG KE RESET PASSWORD (TANPA DATABASE) ============
-    // NOTE: Fitur ini bypass validasi karena belum ada database
+    final int nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if (nowSeconds > currentExpiredAt) {
+      tts.speak("OTP sudah kedaluwarsa");
+      return;
+    }
+
+    if (otp != currentToken) {
+      tts.speak("OTP tidak sesuai");
+      return;
+    }
+
     tts.speak("Kode OTP valid, lanjut ke reset password");
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ResetPasswordScreen()),
+      MaterialPageRoute(
+        builder: (_) => ResetPasswordScreen(
+          email: widget.email,
+          token: currentToken,
+        ),
+      ),
     );
+  }
+
+  Future<void> resendOtp() async {
+    final response = await forgotApi.requestReset(
+      ForgotPasswordRequest(email: widget.email),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (response.isSuccess) {
+      if (response.token == null || response.token!.isEmpty) {
+        tts.speak("Token OTP belum diterima dari server");
+        return;
+      }
+      if (response.expired == null) {
+        tts.speak("Waktu kedaluwarsa OTP belum diterima dari server");
+        return;
+      }
+
+      setState(() {
+        currentToken = response.token!;
+        currentExpiredAt = response.expired!;
+      });
+
+      tts.speak(response.message.isNotEmpty
+          ? response.message
+          : "OTP berhasil dikirim ulang");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Kode OTP telah dikirim ulang ke email Anda"),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else {
+      tts.speak(response.message.isNotEmpty
+          ? response.message
+          : "Gagal mengirim ulang OTP");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    tts.speak("Halaman verifikasi kode OTP");
+  tts.speak("Halaman verifikasi kode OTP");
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -134,7 +215,7 @@ class OTPScreen extends StatelessWidget {
 
               // 📌 INFO TEXT
               Text(
-                "Kode ini hanya berlaku selama 1 menit setelah dikirim",
+                "Kode ini hanya berlaku selama 2 menit setelah dikirim",
                 style: TextStyle(
                   color: Colors.grey[500],
                   fontSize: 12,
@@ -165,14 +246,7 @@ class OTPScreen extends StatelessWidget {
                     SizedBox(height: 8),
                     TextButton(
                       onPressed: () {
-                        tts.speak("Kode OTP telah dikirim ulang");
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text("Kode OTP telah dikirim ulang ke email Anda"),
-                            backgroundColor: Colors.green,
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
+                        resendOtp();
                       },
                       child: Text(
                         "Kirim Ulang Kode",

@@ -2,11 +2,20 @@ import 'package:flutter/material.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/custom_button.dart';
 import '../services/tts_service.dart';
+import '../services/reset_password_api_service.dart';
+import '../models/reset_password_request.dart';
 import '../utils/colors.dart';
 import 'login_screen.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({super.key});
+  final String email;
+  final String token;
+
+  const ResetPasswordScreen({
+    super.key,
+    required this.email,
+    required this.token,
+  });
 
   @override
   State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
@@ -16,6 +25,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final TextEditingController newPasswordController = TextEditingController();
   final TextEditingController confirmPasswordController = TextEditingController();
   final TTSService tts = TTSService();
+  final ResetPasswordApiService resetApi = ResetPasswordApiService();
   String passwordStrength = ""; // Track password strength
 
   @override
@@ -91,7 +101,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   }
 
   // ============ HANDLE RESET PASSWORD ============
-  void resetPassword(BuildContext context) {
+  Future<void> resetPassword(BuildContext context) async {
     String newPass = newPasswordController.text.trim();
     String confirmPass = confirmPasswordController.text.trim();
 
@@ -113,13 +123,32 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       return;
     }
 
-    tts.speak("Password berhasil diubah, silakan login kembali");
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => LoginScreen()),
-      (route) => false,
+    final response = await resetApi.resetPassword(
+      ResetPasswordRequest(
+        email: widget.email,
+        token: widget.token,
+        password: newPass,
+      ),
     );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (response.isSuccess) {
+      tts.speak(response.message.isNotEmpty
+          ? response.message
+          : "Password berhasil diubah, silakan login kembali");
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => LoginScreen()),
+        (route) => false,
+      );
+    } else {
+      tts.speak(response.message.isNotEmpty
+          ? response.message
+          : "Token tidak valid");
+    }
   }
 
   @override
