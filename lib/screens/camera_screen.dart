@@ -55,6 +55,35 @@ class _CameraScreenState extends State<CameraScreen> {
     super.dispose();
   }
 
+  Widget buildCameraPreview() {
+    final previewSize = controller?.value.previewSize;
+    if (previewSize == null) {
+      return CameraPreview(controller!);
+    }
+
+    // Kamera biasanya memberikan rasio landscape, ubah ke portrait 9:16
+    final double previewAspectRatio = previewSize.height / previewSize.width;
+
+    return Center(
+      child: AspectRatio(
+        aspectRatio: 9 / 16,
+        child: ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.center,
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: previewSize.width,
+                height: previewSize.width / previewAspectRatio,
+                child: CameraPreview(controller!),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (controller == null || !controller!.value.isInitialized) {
@@ -68,7 +97,7 @@ class _CameraScreenState extends State<CameraScreen> {
         children: [
           // 📷 PREVIEW KAMERA (FULL SCREEN)
           Positioned.fill(
-            child: CameraPreview(controller!),
+            child: buildCameraPreview(),
           ),
 
           // 🔙 TOMBOL KEMBALI (KANAN BAWAH)
