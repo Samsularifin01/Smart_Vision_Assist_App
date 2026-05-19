@@ -11,7 +11,7 @@ import 'reset_password_screen.dart';
 class OTPScreen extends StatefulWidget {
   final String email;
   final String serverToken;
-  final int expiredAt;
+  final String expiredAt;
 
   const OTPScreen({
     super.key,
@@ -29,7 +29,7 @@ class _OTPScreenState extends State<OTPScreen> {
   final TTSService tts = TTSService();
   final ForgotPasswordApiService forgotApi = ForgotPasswordApiService();
   late String currentToken;
-  late int currentExpiredAt;
+  late String currentExpiredAt;
 
   @override
   void initState() {
@@ -54,11 +54,12 @@ class _OTPScreenState extends State<OTPScreen> {
       return;
     }
 
-    final int nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    if (nowSeconds > currentExpiredAt) {
-      tts.speak("OTP sudah kedaluwarsa");
-      return;
-    }
+    final DateTime expiredTime = DateTime.parse(currentExpiredAt);
+
+    if (DateTime.now().isAfter(expiredTime)) {
+    tts.speak("OTP sudah kedaluwarsa");
+    return;
+}
 
     if (otp != currentToken) {
       tts.speak("OTP tidak sesuai");

@@ -2,7 +2,7 @@ class ForgotPasswordResponse {
   final String status;
   final String message;
   final String? token;
-  final int? expired;
+  final String? expired;
 
   const ForgotPasswordResponse({
     required this.status,
@@ -12,12 +12,12 @@ class ForgotPasswordResponse {
   });
 
   factory ForgotPasswordResponse.fromJson(Map<String, dynamic> json) {
-    final dynamic expiredValue = json["expired"];
+    
     return ForgotPasswordResponse(
       status: json["status"]?.toString() ?? "error",
       message: json["message"]?.toString() ?? "",
       token: json["token"]?.toString(),
-      expired: expiredValue is num ? expiredValue.toInt() : null,
+      expired: json["expired"]?.toString(),
     );
   }
 
