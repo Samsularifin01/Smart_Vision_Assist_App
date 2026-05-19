@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/tts_service.dart';
 import '../services/yolo_detection_service.dart';
@@ -29,6 +30,8 @@ class _CameraScreenState extends State<CameraScreen> {
   List<YoloDetection> detectedObjects = const [];
   Size? detectionFrameSize;
   Timer? _detectionTimer;
+  Timer? _vibrationTimer;
+  bool _isVibrating = false;
   String _lastSpokenMessage = "";
   DateTime? _lastSpokenAt;
 
@@ -96,6 +99,9 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> stopRecording() async {
     _detectionTimer?.cancel();
     _detectionTimer = null;
+    _vibrationTimer?.cancel();
+    _vibrationTimer = null;
+    _isVibrating = false;
 
     if (!mounted) return;
     setState(() {
@@ -190,6 +196,8 @@ class _CameraScreenState extends State<CameraScreen> {
       return;
     }
 
+    _vibrateForTwoSeconds();
+
     final Map<String, int> objectCounts = {};
     for (final YoloDetection object in response.objects) {
       objectCounts[object.name] = (objectCounts[object.name] ?? 0) + 1;
@@ -202,6 +210,32 @@ class _CameraScreenState extends State<CameraScreen> {
         .join(", ");
 
     await _speakOnce("Terdeteksi $objectSummary");
+  }
+
+  void _vibrateForTwoSeconds() {
+    if (_isVibrating) {
+      return;
+    }
+
+    _isVibrating = true;
+    int vibrationCount = 0;
+    const int maxVibrationCount = 8;
+    const Duration vibrationInterval = Duration(milliseconds: 250);
+
+    HapticFeedback.vibrate();
+    vibrationCount++;
+
+    _vibrationTimer?.cancel();
+    _vibrationTimer = Timer.periodic(vibrationInterval, (Timer timer) {
+      if (!mounted || !isRecording || vibrationCount >= maxVibrationCount) {
+        timer.cancel();
+        _isVibrating = false;
+        return;
+      }
+
+      HapticFeedback.vibrate();
+      vibrationCount++;
+    });
   }
 
   Future<void> _speakOnce(String message) async {
@@ -221,6 +255,7 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void dispose() {
     _detectionTimer?.cancel();
+    _vibrationTimer?.cancel();
     controller?.dispose();
     super.dispose();
   }
