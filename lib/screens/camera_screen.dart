@@ -5,10 +5,12 @@ import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/tts_service.dart';
+import '../services/vibration_service.dart';
 import '../services/yolo_detection_service.dart';
+import 'login_screen.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -23,6 +25,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   final YoloDetectionService _detectionService = YoloDetectionService();
   final TTSService _tts = TTSService();
+  final VibrationService _vibrationService = VibrationService();
 
   bool isRecording = false;
   bool isDetecting = false;
@@ -31,7 +34,8 @@ class _CameraScreenState extends State<CameraScreen> {
   Size? detectionFrameSize;
   Timer? _detectionTimer;
   Timer? _vibrationTimer;
-  bool _isVibrating = false;
+  
+  bool _isLoggingOut = false;
   String _lastSpokenMessage = "";
   DateTime? _lastSpokenAt;
 
@@ -101,7 +105,8 @@ class _CameraScreenState extends State<CameraScreen> {
     _detectionTimer = null;
     _vibrationTimer?.cancel();
     _vibrationTimer = null;
-    _isVibrating = false;
+    await _vibrationService.stop();
+    
 
     if (!mounted) return;
     setState(() {
@@ -112,6 +117,43 @@ class _CameraScreenState extends State<CameraScreen> {
       detectionFrameSize = null;
     });
     await _tts.speak("Deteksi dihentikan");
+  }
+
+  Future<void> logout() async {
+    if (_isLoggingOut) {
+      return;
+    }
+
+    _isLoggingOut = true;
+
+    if (isRecording ||
+        isDetecting ||
+        _detectionTimer != null ||
+        _vibrationTimer != null) {
+      await stopRecording();
+    } else {
+      _detectionTimer?.cancel();
+      _detectionTimer = null;
+      _vibrationTimer?.cancel();
+      _vibrationTimer = null;
+      await _vibrationService.stop();
+      
+    }
+
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove("auth_token");
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(),
+      ),
+      (route) => false,
+    );
   }
 
   Future<void> _detectCurrentFrame() async {
@@ -196,7 +238,7 @@ class _CameraScreenState extends State<CameraScreen> {
       return;
     }
 
-    _vibrateForTwoSeconds();
+    await _vibrateForSevenSeconds();
 
     final Map<String, int> objectCounts = {};
     for (final YoloDetection object in response.objects) {
@@ -212,29 +254,16 @@ class _CameraScreenState extends State<CameraScreen> {
     await _speakOnce("Terdeteksi $objectSummary");
   }
 
-  void _vibrateForTwoSeconds() {
-    if (_isVibrating) {
-      return;
-    }
-
-    _isVibrating = true;
-    int vibrationCount = 0;
-    const int maxVibrationCount = 8;
-    const Duration vibrationInterval = Duration(milliseconds: 250);
-
-    HapticFeedback.vibrate();
-    vibrationCount++;
-
+  Future<void> _vibrateForSevenSeconds() async {
     _vibrationTimer?.cancel();
-    _vibrationTimer = Timer.periodic(vibrationInterval, (Timer timer) {
-      if (!mounted || !isRecording || vibrationCount >= maxVibrationCount) {
-        timer.cancel();
-        _isVibrating = false;
-        return;
-      }
+   
+    const Duration vibrationDuration = Duration(seconds: 7);
 
-      HapticFeedback.vibrate();
-      vibrationCount++;
+    await _vibrationService.vibrateFor(vibrationDuration);
+
+    _vibrationTimer = Timer(vibrationDuration, () {
+      _vibrationTimer = null;
+    
     });
   }
 
@@ -256,6 +285,7 @@ class _CameraScreenState extends State<CameraScreen> {
   void dispose() {
     _detectionTimer?.cancel();
     _vibrationTimer?.cancel();
+    unawaited(_vibrationService.stop());
     controller?.dispose();
     super.dispose();
   }
@@ -291,94 +321,108 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   Widget build(BuildContext context) {
     if (controller == null || !controller!.value.isInitialized) {
-      return Scaffold(
-        body: Center(
-          child: statusMessage == "Tekan tombol rekam untuk mulai deteksi"
-              ? const CircularProgressIndicator()
-              : Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    statusMessage,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16),
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (bool didPop, Object? result) async {
+          if (!didPop) {
+            await logout();
+          }
+        },
+        child: Scaffold(
+          body: Center(
+            child: statusMessage == "Tekan tombol rekam untuk mulai deteksi"
+                ? const CircularProgressIndicator()
+                : Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      statusMessage,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                    ),
                   ),
-                ),
+          ),
         ),
       );
     }
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: buildCameraPreview(),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: _BoundingBoxOverlay(
-                imageSize: detectionFrameSize,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (!didPop) {
+          await logout();
+        }
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: buildCameraPreview(),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: _BoundingBoxOverlay(
+                  imageSize: detectionFrameSize,
+                  objects: detectedObjects,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 48,
+              left: 16,
+              right: 16,
+              child: _DetectionStatusPanel(
+                isRecording: isRecording,
+                isDetecting: isDetecting,
+                statusMessage: statusMessage,
                 objects: detectedObjects,
               ),
             ),
-          ),
-          Positioned(
-            top: 48,
-            left: 16,
-            right: 16,
-            child: _DetectionStatusPanel(
-              isRecording: isRecording,
-              isDetecting: isDetecting,
-              statusMessage: statusMessage,
-              objects: detectedObjects,
-            ),
-          ),
-          Positioned(
-            bottom: 40,
-            right: 30,
-            child: Semantics(
-              label: "Kembali",
-              button: true,
-              child: FloatingActionButton(
-                backgroundColor: Colors.black,
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                child: const Icon(Icons.arrow_back),
+            Positioned(
+              bottom: 40,
+              right: 30,
+              child: Semantics(
+                label: "Kembali",
+                button: true,
+                child: FloatingActionButton(
+                  backgroundColor: Colors.black,
+                  onPressed: logout,
+                  child: const Icon(Icons.arrow_back),
+                ),
               ),
             ),
-          ),
-          Positioned(
-            bottom: 30,
-            left: MediaQuery.of(context).size.width / 2 - 35,
-            child: Semantics(
-              label: isRecording ? "Stop rekam" : "Mulai rekam",
-              button: true,
-              child: GestureDetector(
-                onTap: () {
-                  if (isRecording) {
-                    stopRecording();
-                  } else {
-                    startRecording();
-                  }
-                },
-                child: Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isRecording ? Colors.red : Colors.white,
-                    border: Border.all(color: Colors.grey, width: 4),
-                  ),
-                  child: Icon(
-                    isRecording ? Icons.stop : Icons.circle,
-                    color: isRecording ? Colors.white : Colors.red,
-                    size: 30,
+            Positioned(
+              bottom: 30,
+              left: MediaQuery.of(context).size.width / 2 - 35,
+              child: Semantics(
+                label: isRecording ? "Stop rekam" : "Mulai rekam",
+                button: true,
+                child: GestureDetector(
+                  onTap: () {
+                    if (isRecording) {
+                      stopRecording();
+                    } else {
+                      startRecording();
+                    }
+                  },
+                  child: Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isRecording ? Colors.red : Colors.white,
+                      border: Border.all(color: Colors.grey, width: 4),
+                    ),
+                    child: Icon(
+                      isRecording ? Icons.stop : Icons.circle,
+                      color: isRecording ? Colors.white : Colors.red,
+                      size: 30,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
