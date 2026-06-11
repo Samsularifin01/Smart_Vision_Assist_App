@@ -5,7 +5,7 @@ class ApiConfig {
   static const bool useAndroidEmulator = false;
 
   // Ganti IP ini dengan IP laptop/PC Anda saat menggunakan HP fisik (ADB).
-  static const String deviceHost = "192.168.18.14:8000";
+  static const String deviceHost = "192.168.110.147:8000";
 
   static String get baseUrl {
     if (Platform.isAndroid && useAndroidEmulator) {
@@ -14,3 +14,4 @@ class ApiConfig {
     return "http://$deviceHost";
   }
 }
+
