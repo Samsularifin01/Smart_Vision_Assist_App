@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/tts_service.dart';
@@ -19,7 +20,10 @@ class CameraScreen extends StatefulWidget {
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> {
+class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
+  static const MethodChannel _screenChannel =
+      MethodChannel("smart_vision_assist/screen");
+
   CameraController? controller;
   List<CameraDescription>? cameras;
 
@@ -36,13 +40,29 @@ class _CameraScreenState extends State<CameraScreen> {
   Timer? _vibrationTimer;
   
   bool _isLoggingOut = false;
+  bool _isStatusActive = true;
   String _lastSpokenMessage = "";
   DateTime? _lastSpokenAt;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_setKeepScreenOn(true));
     initCamera();
+  }
+
+  Future<void> _setKeepScreenOn(bool enabled) async {
+    try {
+      await _screenChannel.invokeMethod<void>(
+        "setKeepScreenOn",
+        {"enabled": enabled},
+      );
+    } on MissingPluginException {
+      // Platform selain Android boleh mengabaikan fitur ini.
+    } catch (_) {
+      // Jangan sampai kegagalan wakelock mengganggu kamera.
+    }
   }
 
   Future<void> initCamera() async {
@@ -281,13 +301,89 @@ class _CameraScreenState extends State<CameraScreen> {
     await _tts.speak(message);
   }
 
+  Future<bool> _confirmDeactivateAccount() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext confirmationContext) {
+        return AlertDialog(
+          title: const Text("Konfirmasi"),
+          content: const Text("Apakah anda yakin menonaktifkan akun ini?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(confirmationContext).pop(false),
+              child: const Text("Tidak"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(confirmationContext).pop(true),
+              child: const Text("Ya"),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed ?? false;
+  }
+
+  void _showSettings() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: const Text("Setting"),
+              content: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text("Status"),
+                subtitle: Text(_isStatusActive ? "Aktif" : "Nonaktif"),
+                value: _isStatusActive,
+                onChanged: (bool value) async {
+                  if (!value) {
+                    final bool isConfirmed =
+                        await _confirmDeactivateAccount();
+                    if (!isConfirmed || !mounted) {
+                      return;
+                    }
+                  }
+
+                  setState(() {
+                    _isStatusActive = value;
+                  });
+                  setDialogState(() {});
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text("Tutup"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _detectionTimer?.cancel();
     _vibrationTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_setKeepScreenOn(false));
     unawaited(_vibrationService.stop());
     controller?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_setKeepScreenOn(true));
+    } else {
+      unawaited(_setKeepScreenOn(false));
+    }
   }
 
   Widget buildCameraPreview() {
@@ -418,6 +514,20 @@ class _CameraScreenState extends State<CameraScreen> {
                       size: 30,
                     ),
                   ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 40,
+              left: MediaQuery.of(context).size.width / 2 - 130,
+              child: Semantics(
+                label: "Buka setting",
+                button: true,
+                child: FloatingActionButton(
+                  heroTag: "camera_settings",
+                  backgroundColor: Colors.black,
+                  onPressed: _showSettings,
+                  child: const Icon(Icons.settings, color: Colors.white),
                 ),
               ),
             ),
