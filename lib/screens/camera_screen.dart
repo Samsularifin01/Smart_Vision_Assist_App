@@ -40,7 +40,6 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   Timer? _vibrationTimer;
   
   bool _isLoggingOut = false;
-  bool _isStatusActive = true;
   String _lastSpokenMessage = "";
   DateTime? _lastSpokenAt;
 
@@ -301,70 +300,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     await _tts.speak(message);
   }
 
-  Future<bool> _confirmDeactivateAccount() async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext confirmationContext) {
-        return AlertDialog(
-          title: const Text("Konfirmasi"),
-          content: const Text("Apakah anda yakin menonaktifkan akun ini?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(confirmationContext).pop(false),
-              child: const Text("Tidak"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(confirmationContext).pop(true),
-              child: const Text("Ya"),
-            ),
-          ],
-        );
-      },
-    );
 
-    return confirmed ?? false;
-  }
-
-  void _showSettings() {
-    showDialog<void>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
-            return AlertDialog(
-              title: const Text("Setting"),
-              content: SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("Status"),
-                subtitle: Text(_isStatusActive ? "Aktif" : "Nonaktif"),
-                value: _isStatusActive,
-                onChanged: (bool value) async {
-                  if (!value) {
-                    final bool isConfirmed =
-                        await _confirmDeactivateAccount();
-                    if (!isConfirmed || !mounted) {
-                      return;
-                    }
-                  }
-
-                  setState(() {
-                    _isStatusActive = value;
-                  });
-                  setDialogState(() {});
-                },
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text("Tutup"),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
+ 
 
   @override
   void dispose() {
@@ -517,20 +454,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 ),
               ),
             ),
-            Positioned(
-              bottom: 40,
-              left: MediaQuery.of(context).size.width / 2 - 130,
-              child: Semantics(
-                label: "Buka setting",
-                button: true,
-                child: FloatingActionButton(
-                  heroTag: "camera_settings",
-                  backgroundColor: Colors.black,
-                  onPressed: _showSettings,
-                  child: const Icon(Icons.settings, color: Colors.white),
-                ),
-              ),
-            ),
+            
           ],
         ),
       ),
